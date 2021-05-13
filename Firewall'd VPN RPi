@@ -1,0 +1,177 @@
+Kali Behind NAT
+
+sudo tee -a /etc/network/interfaces <<EOF
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+sudo systemctl restart NetworkManager
+
+
+
+  sudo apt-get update
+  sudo apt-get install openvpn git -y
+
+
+
+  cd /opt
+  sudo git clone https://github.com/OpenVPN/easy-rsa.git
+
+  cd /opt/easy-rsa/easyrsa3
+
+
+
+ sudo ./easyrsa init-pki
+ sudo ./easyrsa --batch "--req-cn=bridge_vpn" build-ca nopass
+ sudo ./easyrsa build-server-full bridge_vpn_server nopass
+ sudo ./easyrsa build-client-full bridge_vpn_client nopass
+ sudo mv pki/ca.crt ~/bridge_vpn_ca.crt
+ sudo grep -A 1000 'BEGIN CERTIFICATE' pki/issued/bridge_vpn_server.crt > ~/bridge_vpn_server.crt
+ sudo grep -A 1000 'BEGIN CERTIFICATE' pki/issued/bridge_vpn_client.crt > ~/bridge_vpn_client.crt
+ sudo mv pki/private/bridge_vpn_server.key ~/bridge_vpn_server.key
+ sudo mv pki/private/bridge_vpn_client.key ~/bridge_vpn_client.key
+
+
+ sudo ./easyrsa init-pki
+ sudo ./easyrsa --batch "--req-cn=redirected_vpn" build-ca nopass
+ sudo ./easyrsa build-server-full redirected_vpn_server nopass
+ sudo ./easyrsa build-client-full redirected_vpn_client nopass
+ sudo mv pki/ca.crt ~/redirected_vpn_ca.crt
+ sudo grep -A 1000 'BEGIN CERTIFICATE' pki/issued/redirected_vpn_server.crt > ~/redirected_vpn_server.crt
+ sudo grep -A 1000 'BEGIN CERTIFICATE' pki/issued/redirected_vpn_client.crt > ~/redirected_vpn_client.crt
+ sudo mv pki/private/redirected_vpn_server.key ~/redirected_vpn_server.key
+ sudo mv pki/private/redirected_vpn_client.key ~/redirected_vpn_client.key
+
+
+
+cd
+
+sudo chown caleb7773 ~/*
+sudo chgrp caleb7773 ~/*
+
+serverca=$(cat ~/bridge_vpn_ca.crt)
+servercert=$(cat ~/bridge_vpn_server.crt)
+serverkey=$(cat ~/bridge_vpn_server.key)
+
+sudo tee -a ~/bridge_vpn.conf << EOF
+dev-type tun
+dev bridge0
+topology subnet
+server 10.99.99.0 255.255.255.0
+dh none
+log bridge_vpnserver.log
+keepalive 10 60
+tls-server
+<ca>
+${serverca}
+</ca>
+<cert>
+${servercert}
+</cert>
+<key>
+${serverkey}
+</key>
+EOF
+
+
+serverca=$(cat ~/redirected_vpn_ca.crt)
+servercert=$(cat ~/redirected_vpn_server.crt)
+serverkey=$(cat ~/redirected_vpn_server.key)
+
+sudo tee -a ~/redirected_vpn.conf << EOF
+dev-type tun
+dev redirect0
+topology subnet
+server 10.98.98.0 255.255.255.0
+port 1195
+dh none
+log redirected_vpnserver.log
+keepalive 10 60
+tls-server
+<ca>
+${serverca}
+</ca>
+<cert>
+${servercert}
+</cert>
+<key>
+${serverkey}
+</key>
+EOF
+
+
+
+###################
+# Bridge IP
+serverip=10.100.0.135
+#
+###################
+
+serverca=$(cat ~/bridge_vpn_ca.crt)
+vpn1cert=$(cat ~/bridge_vpn_client.crt)
+vpn1key=$(cat ~/bridge_vpn_client.key)
+
+sudo tee -a ~/bridge_vpn_client.conf << EOF
+dev-type tun
+dev bridge
+client
+remote ${serverip}
+log bridge_vpnserver.log
+keepalive 10 60
+tls-client
+<ca>
+${serverca}
+</ca>
+<cert>
+${vpn1cert}
+</cert>
+<key>
+${vpn1key}
+</key>
+EOF
+
+
+###################
+# Bridge IP to be redirected
+serverip=10.100.0.135
+#
+###################
+
+serverca=$(cat ~/redirected_vpn_ca.crt)
+vpn1cert=$(cat ~/redirected_vpn_client.crt)
+vpn1key=$(cat ~/redirected_vpn_client.key)
+
+sudo tee -a ~/redirected_vpn_client.conf << EOF
+dev-type tun
+dev redirect
+client
+remote ${serverip} 1195
+log redirect_vpnserver.log
+keepalive 10 60
+tls-client
+<ca>
+${serverca}
+</ca>
+<cert>
+${vpn1cert}
+</cert>
+<key>
+${vpn1key}
+</key>
+EOF
+
+cd
+
+sudo cp bridge_vpn_client.conf /etc/openvpn 
+scp bridge_vpn.conf kali@10.100.0.135:/tmp
+scp redirected_vpn_client.conf kali@10.100.0.14:/tmp
+sudo cp redirected_vpn.conf /etc/openvpn
+
+
+sudo systemctl enable openvpn@redirected_vpn
+sudo systemctl start openvpn@redirected_vpn
+
+sudo systemctl enable openvpn@bridge_vpn_client
+sudo systemctl start openvpn@bridge_vpn_client
+
