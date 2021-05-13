@@ -181,10 +181,44 @@ sudo apt-get -y install iptables-persistent
 sudo iptables-save | sudo tee /etc/iptables/rules.v4
 
 
+sudo tee -a /etc/network/interfaces <<EOF
 
+auto eth1
+iface eth1 inet static 
+  address 192.168.0.100
+  netmask 255.255.255.0
+  gateway 192.168.0.1
+EOF
+
+sudo systemctl restart NetworkManager
 sudo systemctl enable openvpn@redirected_vpn
 sudo systemctl start openvpn@redirected_vpn
 
 sudo systemctl enable openvpn@bridge_vpn_client
 sudo systemctl start openvpn@bridge_vpn_client
+
+
+
+
+
+
+
+
+############################################################
+#         Run this on the NoInternet Client                # 
+############################################################
+
+sudo tee -a /etc/network/interfaces <<EOF
+
+auto eth0
+iface eth0 inet static 
+  address 192.168.0.101
+  netmask 255.255.255.0
+  gateway 192.168.0.1
+EOF
+
+sudo systemctl restart NetworkManager
+
+############################################################
+
 
