@@ -1,0 +1,28 @@
+RPi Internet Server (10.100.0.135)
+
+  sudo apt-get update
+  sudo apt-get install openvpn git -y
+
+
+######
+#
+# Run the rest after you finish third script
+#
+######
+
+sudo mv /tmp/bridge_vpn.conf /etc/openvpn
+
+
+sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf && sudo sysctl -p
+
+sudo iptables -t nat -A PREROUTING -s 0.0.0.0/0 -p udp --dport 1195 -j DNAT --to-destination 10.99.99.2
+sudo iptables -t nat -A POSTROUTING -o bridge0 -j MASQUERADE
+
+echo iptables-persistent iptables-persistent/autosave_v4 boolean true | sudo debconf-set-selections
+echo iptables-persistent iptables-persistent/autosave_v6 boolean true | sudo debconf-set-selections
+sudo apt-get -y install iptables-persistent
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+
+
+sudo systemctl enable openvpn@bridge_vpn
+sudo systemctl start openvpn@bridge_vpn
