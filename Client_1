@@ -1,0 +1,17 @@
+RPi Internet Client   (10.100.0.14)
+
+  sudo apt-get update
+  sudo apt-get install openvpn git -y
+
+
+######
+#
+# Run the rest after you finish third script
+#
+######
+
+
+sudo mv /tmp/redirected_vpn_client.conf /etc/openvpn
+
+sudo systemctl enable openvpn@redirected_vpn_client
+sudo systemctl start openvpn@redirected_vpn_client
